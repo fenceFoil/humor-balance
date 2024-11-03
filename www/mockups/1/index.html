@@ -242,13 +242,13 @@
             <div class="actionButtons">
                 <div class="progress" :style="{'--value':Number.parseFloat(await getAcquireHumorProgress())}"></div>
                 <div x-show="getCurrLocationHumorCountAtLeast(2)">
-                    <button class="attackButton">
+                    <button class="attackButton" @click="attackOppose">
                         Atk: Oppose <span x-text="HUMORS[HUMORS[currLocation].oppositeId].label"></span>
                     </button>
                     <div style="text-align: center;">-2 <span x-text="HUMORS[currLocation].label"></span>: -1 <span x-text="HUMORS[currLocation].label"></span> from other at <span x-text="HUMORS[HUMORS[currLocation].oppositeId].organLabel"></span></div>
                 </div>
                 <div x-show="getCurrLocationHumorCountAtLeast(4)">
-                    <button class="attackButton">
+                    <button class="attackButton" @click="attackLetting">
                         Atk: <span x-text="HUMORS[currLocation].label"></span> Letting
                     </button>
                     <div style="text-align: center;">-4 <span x-text="HUMORS[currLocation].label"></span>: -2 other humors from all others on <span x-text="HUMORS[currLocation].organLabel"></span></div>
@@ -407,7 +407,14 @@
                 },
 
                 async changeHumorCount(humorId, amount) {
+                    let oldHumorCount = this.humorCounts[humorId];
                     this.humorCounts[humorId] = Math.max(0, Math.min(4, this.humorCounts[humorId] + amount));
+                    let newHumorCount = this.humorCounts[humorId];
+                    if (oldHumorCount === 4) {
+                        if (newHumorCount < 4) {
+                            this.resetAcquireHumorTimer();
+                        }
+                    }
                 },
 
                 async getTitle() {
@@ -468,7 +475,7 @@
 
                 async resetAcquireHumorTimer() {
                     this.acquireHumorStartTime = Date.now();
-                    this.acquireHumorEndTime = this.acquireHumorStartTime + 5000;
+                    this.acquireHumorEndTime = this.acquireHumorStartTime + 7000;
                 },
 
                 async enterLocation(locationId) {
@@ -480,7 +487,11 @@
                 },
 
                 async getAcquireHumorProgress() {
-                    return Math.max(0, Math.min(1, (this.tickingNow - this.acquireHumorStartTime) / (this.acquireHumorEndTime - this.acquireHumorStartTime)));
+                    if (this.humorCounts[this.currLocation] < 4) {
+                        return Math.max(0, Math.min(1, (this.tickingNow - this.acquireHumorStartTime) / (this.acquireHumorEndTime - this.acquireHumorStartTime)));
+                    } else {
+                        return 0;
+                    }
                 },
 
                 async incrementLocation() {
@@ -508,6 +519,14 @@
 
                 async getCurrLocationHumorCountAtLeast(count) {
                     return (await this.getCurrLocationHumorCount()) >= count;
+                },
+
+                async attackOppose() {
+                    this.changeHumorCount(this.currLocation, -2);
+                },
+
+                async attackLetting() {
+                    this.changeHumorCount(this.currLocation, -4);
                 },
             }, {})))
         });
