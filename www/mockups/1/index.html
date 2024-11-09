@@ -51,7 +51,8 @@
         }
 
         main {
-            color: rgb(255, 207, 160);
+            --color: rgb(255, 207, 160);
+            color: var(--color);
 
             display: flex;
             flex-direction: column;
@@ -99,6 +100,7 @@
         }
 
         .scoreMap {
+            user-select: none;
             display: grid;
             grid-template-areas:
                 "blackBileOrgan blackBile . . . blood bloodOrgan"
@@ -204,7 +206,11 @@
             right: calc((1 - var(--value)) * 100%);
             transition: right 100ms;
             content: " ";
-            background-color: var(--pageBgColor);
+            background-color: var(--color);/*var(--pageBgColor);*/
+        }
+
+        .depositScoreProgress::after {
+            background-color: var(--color) !important;
         }
     </style>
 </head>
@@ -217,6 +223,12 @@
     <script src="alpine.3.13.2.min.js" defer></script>
     <script src="howler.min.js"></script>
     <main>
+        <h1>
+            <span x-text="playerName"></span>
+            <div style="display: inline-block">
+                <div class="scoreGem" style="font-size: 1.2em; margin-left: 0.3em;" x-text="gameScore"></div>
+            </div>
+        </h1>
         <h1 x-text="getTitle"></h1>
         <div class="scoreMap">
             <template x-for="humor in HUMORS">
@@ -238,27 +250,57 @@
                 <div class="humorBalanceScore" x-text="getHumorImbalance(humor.id)" :style="{'gridArea':`${humor.id}Balance`}"></div>
             </template>
         </div>
+        <template x-if="currLocation === 'center'">
+            <div style="display: flex; flex-direction: column;">
+                <h2 x-show="depositScoreEndTime!==null">Let Blood To Add To Score</h2>
+                <h2 x-show="depositScoreEndTime===null">Come Back To Let Blood Later</h2>
+                <div class="progress depositScoreProgress" :style="{'--value':Number.parseFloat(await getDepositScoreProgress())}"></div>
+                <!--button class="attackButton" @click="cancelDepositScore" x-show="depositScoreEndTime!==null">
+                    Cancel
+                </button-->
+            </div>
+        </template>
         <template x-if="currLocationIsHumor">
             <div class="actionButtons">
                 <div class="progress" :style="{'--value':Number.parseFloat(await getAcquireHumorProgress())}"></div>
                 <div x-show="getCurrLocationHumorCountAtLeast(2)">
                     <button class="attackButton" @click="attackOppose">
-                        Atk: Oppose <span x-text="HUMORS[HUMORS[currLocation].oppositeId].label"></span>
+                        <span x-show="!opposeAttackNobodyThere">
+                            Atk: Oppose <span x-text="HUMORS[HUMORS[currLocation].oppositeId].label"></span>
+                        </span>
+                        <span x-show="opposeAttackNobodyThere">
+                            Nobody there!
+                        </span>
                     </button>
                     <div style="text-align: center;">-2 <span x-text="HUMORS[currLocation].label"></span>: -1 <span x-text="HUMORS[currLocation].label"></span> from other at <span x-text="HUMORS[HUMORS[currLocation].oppositeId].organLabel"></span></div>
                 </div>
                 <div x-show="getCurrLocationHumorCountAtLeast(4)">
                     <button class="attackButton" @click="attackLetting">
-                        Atk: <span x-text="HUMORS[currLocation].label"></span> Letting
+                        <span x-show="!lettingAttackNobodyThere">
+                            Atk: <span x-text="HUMORS[currLocation].label"></span> Letting
+                        </span>
+                        <span x-show="lettingAttackNobodyThere">
+                            Nobody there!
+                        </span>
                     </button>
                     <div style="text-align: center;">-4 <span x-text="HUMORS[currLocation].label"></span>: -2 other humors from all others on <span x-text="HUMORS[currLocation].organLabel"></span></div>
                 </div>
             </div>
         </template>
+        <div style="display: flex;flex-direction: column;">
+            <h1>Leaderboard</h1>
+            <template x-for="player in otherPlayers">
+                <div style="display: flex;flex-direction: row;gap: 1em;">
+                    <div style="width: 3ch;" x-text="player.gameScore"></div>
+                    <div style="width: 10ch;" x-text="HUMOR_BALANCE_LOCATION_IDS_TO_LABELS[player.location]"></div>
+                    <div x-text="player.playerName"></div>
+                </div>
+            </template>
+        </div>
     </main>
     <div style="opacity: 0.2; position: absolute; top: 0; right: 0; display: flex; flex-direction: column; gap: 1em;">
-        <button @click="userName=null;location.reload();">Change User</button>
-        <button @click="incrementLocation()">Change Location</button>
+        <button @click="playerId=null;location.reload();">Change User</button>
+        <button @click="incrementLocation()" x-show="debugMode">Change Location</button>
     </div>
 
     <script>
@@ -273,6 +315,7 @@
                 oppositeId: 'yellowBile',
                 elementIcon: "💨",
                 bottomRow: false,
+                enterSound: new Howl({src: ['location-blood.ogg']}),
             },
             'phlegm': {
                 id: 'phlegm',
@@ -284,6 +327,7 @@
                 oppositeId: 'blackBile',
                 elementIcon: "💧",
                 bottomRow: true,
+                enterSound: new Howl({src: ['location-phlegm.ogg']}),
             },
             'yellowBile': {
                 id: 'yellowBile',
@@ -295,6 +339,7 @@
                 oppositeId: 'blood',
                 elementIcon: "🔥",
                 bottomRow: true,
+                enterSound: new Howl({src: ['location-yellowBile.ogg']}),
             },
             'blackBile': {
                 id: 'blackBile',
@@ -306,15 +351,18 @@
                 oppositeId: 'phlegm',
                 elementIcon: "🌾",
                 bottomRow: false,
+                enterSound: new Howl({src: ['location-blackBile.ogg']}),
             },
         }
 
         var LOCATIONS = {
             'center': {
                 label: "Center",
+                enterSound: new Howl({src: ['location-center.ogg']}),
             },
             'between': {
                 label: "Between",
+                enterSound: new Howl({src: ['done.ogg']}),
             },
             'blood': HUMORS.blood,
             'blackBile': HUMORS.blackBile,
@@ -322,7 +370,31 @@
             'phlegm': HUMORS.phlegm,
         }
 
+        var NEW_GAME_HUMOR_COUNTS = {
+                    'blood': 2,
+                    'blackBile': 2,
+                    'yellowBile': 2,
+                    'phlegm': 2,
+                }
+
         var LOCATIONS_ORDER = ['center', 'between', 'blood', 'blackBile', 'yellowBile', 'phlegm']
+
+        var HUMOR_BALANCE_LOCATION_IDS = {
+            'center': 'e4pfjc2wt7g3ma6',
+            'yellowBile': 'xorhdcrizswsnu0',
+            'blackBile': 'ciinvy5h2u72dpw',
+            'blood': 'ilx66ueeex3o2h0',
+            'phlegm': '2vhc903oass9jd8',
+        }
+
+        
+        var HUMOR_BALANCE_LOCATION_IDS_TO_LABELS = {
+            'e4pfjc2wt7g3ma6': 'Heart',
+            'xorhdcrizswsnu0': 'Gallbladder',
+            'ciinvy5h2u72dpw': 'Spleen',
+            'ilx66ueeex3o2h0': 'Liver',
+            '2vhc903oass9jd8': 'Brain',
+        }
 
         function calculateDistance(lat1, lng1, lat2, lng2) {
             const R = 6371; // Radius of Earth in km
@@ -340,56 +412,129 @@
         pb.autoCancellation(false);
 
         var uploadSound = new Howl({src: ['hitHurt.ogg']});
+        var depositScoreStartSound = new Howl({src: ['lettingBlood.ogg']});
+        var depositScoreEndSound = new Howl({src: ['done.ogg']});
+        var hitOppose = new Howl({src: ['hitOppose.ogg']})
+        var hitLetting = new Howl({src: ['hitLetting.ogg']})
+        var attackSound = new Howl({src: ['attack.ogg']})
+
+        // DEBUG MODE - Use query param ?debug
+        const debugMode = new URLSearchParams(window.location.search).get('debog') === '';
+        console.log(debugMode?'Entering debug mode!':'.');
 
         document.addEventListener('alpine:init', () => {
             Alpine.data('d', () => (Object.assign({
                 myLastCoords: null,
-                userName: Alpine.$persist(null),
-                userId: null,
-                userGeoCoordsId: null,
+                playerName: null,
+                playerId: Alpine.$persist(null),
                 playerCoords: [],
                 currLocation: Alpine.$persist('between'),
-                humorCounts: {
-                    'blood': 1,
-                    'blackBile': 0,
-                    'yellowBile': 2,
-                    'phlegm': 4,
-                },
+                humorCounts: structuredClone(NEW_GAME_HUMOR_COUNTS),
                 acquireHumorStartTime: null,
                 acquireHumorEndTime: null,
+                depositScoreStartTime: null,
+                depositScoreEndTime: null,
+                depositScoreCoolingDown: false,
                 tickingNow: null,
+                humorBalanceLocations: [],
+                debugShit: '',
+                gameScore: 0,
+                opposeAttackNobodyThere: false,
+                lettingAttackNobodyThere: false,
+                otherPlayers: [],
 
                 async init() {
-                    if (this.userName === null) {
-                        this.userName = prompt("Enter username:");
-                    }
-                    
-                    // Try to fetch player, creating new player first if they don't exist
-                    let matchingPlayers = (await pb.collection('geo_demo_players').getList(1, 50, {filter: `playerId="${this.userName}"`})).items
-                    if (matchingPlayers.length <= 0) {
-                        // Have to create new player first
-                        await pb.collection('geo_demo_players').create({
-                            'playerId': this.userName,
-                            "name": this.userName,
-                        })
-                        matchingPlayers = (await pb.collection('geo_demo_players').getList(1, 50, {filter: `playerId="${this.userName}"`})).items
-                    }
-                    this.userId = matchingPlayers[0].id;
-                    this.userName = matchingPlayers[0].playerId;
-                    // Try to fetch id of geo coords record, creating if it does not exist
-                    let matchingGeoCoordRecords = (await pb.collection('geo_demo_coords').getList(1, 50, {filter: `playerId="${this.userId}"`})).items
-                    if (matchingGeoCoordRecords.length <= 0) {
-                        // Have to create new geo coords record first
-                        const resp = await pb.collection('geo_demo_coords').create({
-                            playerId: this.userId,
-                            geolocationCoordinates: null,
-                            lastUpdated: luxon.DateTime.utc().toISO(),
-                        })
-                        matchingGeoCoordRecords = [resp]
-                    }
-                    this.userGeoCoordsId = matchingGeoCoordRecords[0].id;
+                    // Download locations and keep updated
+                    this.humorBalanceLocations = await pb.collection('humor_balance_locations').getFullList();
+                    console.log(this.humorBalanceLocations);
+                    pb.collection('humor_balance_locations').subscribe('*', async e => {
+                        console.log("reloading locations...");
+                        this.humorBalanceLocations = await pb.collection('humor_balance_locations').getFullList();
+                    })
 
-                    navigator.geolocation.watchPosition(async p => await this.updateGeoCoords(p), () => console.log("error setting geo coords"), {enableHighAccuracy: true})
+                    // If player not remembered, ask for username and create them
+                    if (this.playerId === null) {
+                        const ZODIAC_SIGNS = ["Aries", "Taurus", "Gemini", "Cancer", "Leo", "Virgo", "Libra", "Scorpio", "Sagittarius", "Capricorn", "Aquarius", "Pisces"];
+                        this.playerName = prompt("Enter username:");
+                        if ((this.playerName === null) || (this.playerName.length <= 0)) {
+                            this.playerName = `${chance.pickone(ZODIAC_SIGNS)}-${chance.pickone(ZODIAC_SIGNS)}`;
+                        }
+
+                        const newPlayerRecord = await pb.collection('humor_balance_players').create({
+                            'playerName': this.playerName,
+                            'active': true,
+                            'location': HUMOR_BALANCE_LOCATION_IDS['between'],
+                            'gameScore': 0,
+                            'humorCounts': NEW_GAME_HUMOR_COUNTS,
+                        })
+                        this.playerId = newPlayerRecord.id;
+                    }
+
+                    // Load current player info
+                    let currPlayerRecord = await pb.collection('humor_balance_players').getOne(this.playerId);
+                    this.playerName = currPlayerRecord.playerName;
+                    this.playerRecord = currPlayerRecord;
+                    this.gameScore = currPlayerRecord.gameScore;
+                    if (currPlayerRecord.humorCounts != null) {
+                        this.humorCounts = currPlayerRecord.humorCounts;
+                    }
+
+                    pb.collection('humor_balance_resets').subscribe('*', async e => {
+                        if (e.action === 'create') {
+                            location.reload();
+                        }
+                    });
+
+                    pb.collection('humor_balance_attacks').subscribe('*', async e => {
+                        if ((e.action === 'create') && (e.record.target === this.playerId)) {
+                            // Register attack and mark it so
+                            await pb.collection('humor_balance_attacks').update(e.record.id, {"ack": true})
+                            if (e.record.type === 'oppose') {
+                                hitOppose.play();
+                                if (this.currLocationIsHumor()) {
+                                    this.changeHumorCount(HUMORS[this.currLocation].oppositeId, -1);
+                                }
+                            }
+                            if (e.record.type === 'letting') {
+                                hitLetting.play();
+                                if (this.currLocationIsHumor()) {
+                                    for (let i=0;i<2;i++) {
+                                        // Get humor besides one you are on that has count > 0
+                                        let availableHumors = [];
+                                        for (let currHumor of Object.keys(HUMORS)) {
+                                            if (currHumor === this.currLocation) {
+                                                continue;
+                                            } else {
+                                                if (this.humorCounts[currHumor] > 0) {
+                                                    availableHumors.push(currHumor);
+                                                }
+                                            }
+                                        }
+                                        if (availableHumors.length > 0) {
+                                            this.changeHumorCount(chance.pickone(availableHumors), -1);
+                                        }
+                                    }
+                                }
+                            }
+                            pb.collection('humor_balance_attacks').delete(e.record.id);
+                        }
+                    })
+
+                    this.otherPlayers = pb.collection('humor_balance_players').getFullList({
+                        filter: 'active = true',
+                        sort: '-gameScore'
+                    })
+
+                    setInterval(async () => {
+                            this.otherPlayers = pb.collection('humor_balance_players').getFullList({
+                            filter: 'active = true',
+                            sort: '-gameScore'
+                        })
+                    }, 2500)
+
+                    if (!debugMode) {
+                        navigator.geolocation.watchPosition(async p => await this.updateGeoCoords(p), () => console.log("error setting geo coords"), {enableHighAccuracy: true})
+                    }
 
                     //setInterval(async () => await this.pollLatestPositions(), 1000);
 
@@ -404,6 +549,36 @@
                         await this.resetAcquireHumorTimer();
                         await this.changeHumorCount(this.currLocation, 1);
                     }
+                    if (await this.getDepositScoreProgress() >= 1) {
+                        await this.depositScore();
+                    }
+                },
+
+                async depositScore() {
+                    depositScoreEndSound.play();
+                    this.depositScoreStartTime = null;
+                    this.depositScoreEndTime = null;
+                    this.depositScoreCoolingDown = true;
+
+                    this.gameScore += await this.getHumorScore();
+
+                    this.humorCounts = structuredClone(NEW_GAME_HUMOR_COUNTS);
+                    for (let currHumor of Object.keys(this.humorCounts)) {
+                        this.humorCounts[currHumor] = chance.integer({min: 0, max: 2})
+                    }
+
+                    pb.collection('humor_balance_players').update(this.playerId, {
+                        'humorCounts':this.humorCounts,
+                        'currentScore':(await this.getHumorScore()),
+                        'gameScore':this.gameScore,
+                        'active': true,
+                    })
+                },
+
+                async cancelDepositScore() {
+                    this.depositScoreStartTime = null;
+                    this.depositScoreEndTime = null;
+                    this.depositScoreCoolingDown = true;
                 },
 
                 async changeHumorCount(humorId, amount) {
@@ -415,13 +590,18 @@
                             this.resetAcquireHumorTimer();
                         }
                     }
+                    pb.collection('humor_balance_players').update(this.playerId, {
+                        'humorCounts':this.humorCounts,
+                        'currentScore':(await this.getHumorScore()),
+                        active: true,
+                    })
                 },
 
                 async getTitle() {
                     if (this.currLocation === 'between') {
                         return "Between";
                     } else if (this.currLocation === 'center') {
-                        return "Center";
+                        return "Heart";
                     } else {
                         return `${HUMORS[this.currLocation].organLabel} (${HUMORS[this.currLocation].label})`;
                     }
@@ -436,19 +616,41 @@
                 async updateGeoCoords(position) {
                     this.myLastCoords = position.coords;
 
+                    // Update location to closest point within range
+                    const distancesToLocations = this.humorBalanceLocations.map(l => ({
+                        id: l.id,
+                        locationId: l.locationId,
+                        distance: calculateDistance(this.myLastCoords.latitude, this.myLastCoords.longitude, l.latitude, l.longitude),
+                        range: l.range,
+                    })).toSorted((a,b) => a.distance-b.distance)
+                    this.debugShit = JSON.stringify(distancesToLocations)
+                    const closestLocation = distancesToLocations[0];
+                    if (closestLocation.distance < closestLocation.range) {
+                        if (this.currLocation !== closestLocation.locationId) {
+                            await this.enterLocation(closestLocation.locationId);
+                        }
+                    } else {
+                        if (this.currLocation !== closestLocation.locationId) {
+                            if (this.currLocation !== 'between') {
+                                await this.enterLocation('between');
+                            }
+                        }
+                    }
+
                     const data = {
-                        "playerId": this.userId,
-                        "geolocationCoordinates": JSON.stringify(this.myLastCoords),
-                        "lastUpdated": luxon.DateTime.utc().toISO(), //"2022-01-01 10:00:00.123Z"
+                        "latitude": this.myLastCoords.latitude,
+                        'longitude': this.myLastCoords.longitude,
+                        //"lastUpdated": luxon.DateTime.utc().toISO(), //"2022-01-01 10:00:00.123Z"
                         "playerName": this.userName,
                     };
 
-                    uploadSound.play();
+                    //uploadSound.play();
 
-                    const record = await pb.collection('geo_demo_coords').update(this.userGeoCoordsId, data);
+                    const record = await pb.collection('humor_balance_players').update(this.playerId, data);
                 },
 
                 async getPositionsWithDistance() {
+                    // TODO OBSOLETE CODE
                     if (!this.playerCoords) {
                         return [];
                     }
@@ -462,7 +664,7 @@
                             this.myLastCoords?.longitude
                         )
                         return p;
-                    }).filter(p => p.playerId !== this.userId)
+                    }).filter(p => p.playerId !== this.playerId)
                     return newPositions.toSorted((a, b) => a.distance - b.distance);
                 },
 
@@ -477,18 +679,49 @@
                     this.acquireHumorStartTime = Date.now();
                     this.acquireHumorEndTime = this.acquireHumorStartTime + 7000;
                 },
+                
+                async resetDepositScoreTimer() {
+                    this.depositScoreStartTime = Date.now();
+                    this.depositScoreEndTime = this.depositScoreStartTime + 7000;
+                    this.depositScoreCoolingDown = false;
+                },
 
                 async enterLocation(locationId) {
+                    console.log("Entering location "+locationId)
                     if (Object.keys(HUMORS).includes(locationId)) {
                         // Restart the acquire humor timer
                         this.resetAcquireHumorTimer();
+
+                        LOCATIONS[locationId].enterSound.play();
+
+                        this.depositScoreCoolingDown = false;
+                    } else if (locationId === 'center') {
+                        if (!this.depositScoreCoolingDown) {
+                            depositScoreStartSound.play();
+                            this.resetDepositScoreTimer();
+                        } else {
+                            LOCATIONS[locationId].enterSound.play();
+                        }
+                    } else if (locationId === 'between') {
+                        LOCATIONS[locationId].enterSound.play();
                     }
                     this.currLocation = locationId;
+                    pb.collection("humor_balance_players").update(this.playerId, {
+                        location: HUMOR_BALANCE_LOCATION_IDS[this.currLocation]
+                    })
                 },
 
                 async getAcquireHumorProgress() {
                     if (this.humorCounts[this.currLocation] < 4) {
                         return Math.max(0, Math.min(1, (this.tickingNow - this.acquireHumorStartTime) / (this.acquireHumorEndTime - this.acquireHumorStartTime)));
+                    } else {
+                        return 0;
+                    }
+                },
+
+                async getDepositScoreProgress() {
+                    if (this.depositScoreEndTime > 0) {
+                        return Math.max(0, Math.min(1, (this.tickingNow - this.depositScoreStartTime) / (this.depositScoreEndTime - this.depositScoreStartTime)));
                     } else {
                         return 0;
                     }
@@ -522,11 +755,58 @@
                 },
 
                 async attackOppose() {
-                    this.changeHumorCount(this.currLocation, -2);
+                    // Get list of targets on opposite side
+                    const oppositePlayers = (await pb.collection('humor_balance_players').getList(1, 50, {
+                        filter: `active = true && location = "${HUMOR_BALANCE_LOCATION_IDS[HUMORS[this.currLocation].oppositeId]}"`
+                    })).items
+                    // No targets? Announce failure and do not attack
+                    console.log(oppositePlayers);
+                    if (oppositePlayers.length <= 0) {
+                        this.opposeAttackNobodyThere = true;
+                        setTimeout(() => this.opposeAttackNobodyThere = false, 3000);
+                    } else {
+                        // Choose one and post a new attack on their humors
+                        let targetPlayer = chance.pickone(oppositePlayers);
+                        await pb.collection('humor_balance_attacks').create({
+                            source: this.playerId,
+                            target: targetPlayer.id,
+                            type: 'oppose',
+                            ack: false,
+                        })
+                        
+                        this.changeHumorCount(this.currLocation, -2);
+                        // Announce success!!!
+                        attackSound.play();
+                    }
                 },
 
                 async attackLetting() {
-                    this.changeHumorCount(this.currLocation, -4);
+                    // Get list of players in same location
+                    const neighborPlayers = (await pb.collection('humor_balance_players').getList(1, 50, {
+                        filter: `active = true && location = "${HUMOR_BALANCE_LOCATION_IDS[this.currLocation]}"`
+                    })).items
+                    // No targets? Announce failure and do not attack
+                    console.log(neighborPlayers);
+                    if (neighborPlayers.length <= 1) {
+                        this.lettingAttackNobodyThere = true;
+                        setTimeout(() => this.lettingAttackNobodyThere = false, 3000);
+                    } else {
+                        // Post attack for each of them
+                        neighborPlayers.forEach(async p => {
+                            if (p.id !== this.playerId) {
+                                await pb.collection('humor_balance_attacks').create({
+                                    source: this.playerId,
+                                    target: p.id,
+                                    type: 'letting',
+                                    ack: false,
+                                })
+                            }
+                        });
+                        
+                        this.changeHumorCount(this.currLocation, -4);
+                        // Announce success!!!
+                        attackSound.play();
+                    }
                 },
             }, {})))
         });

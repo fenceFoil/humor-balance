@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width,initial-scale=1.0">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#031a00" />
+    <link rel="icon" href="favicon.ico">
+    <link rel="stylesheet" href="normalize.css">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Color+Emoji&display=swap" rel="stylesheet">
+
+    <title>Admin - Humor Balance</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=IM+Fell+English:ital@0;1&display=swap');
+
+        /* alpinejs */
+        [x-cloak] {
+            display: none !important;
+        }
+
+        body {
+            /*background-color: #c94622;*/
+            /*background-color: #52380d;*/
+            background-color: var(--pageBgColor);
+            background-image: url("buried.png");
+
+            font-family: "IM Fell English", "Noto Color Emoji", serif;
+            font-weight: 400;
+            font-style: normal;
+
+            display: grid;
+            place-items: center;
+            position: relative;
+
+            color: white;
+
+            --blood: firebrick;
+            --blackBile: black;
+            --yellowBile: #765911;
+            --phlegm: #537919;
+            --between: var(--neutral);
+            --center: #19284c;
+            --neutral: #52380d;
+
+            --pageBgColor: var(--blood);
+        }
+
+        main {
+            color: rgb(255, 207, 160);
+
+            display: flex;
+            flex-direction: column;
+            min-height: 100dvh;
+            max-width: 100dvw;
+            gap: 2em;
+        }
+
+        h1 {
+            text-align: center;
+        }
+
+        #myCoords {
+            display: flex;
+            flex-direction: column;
+            font-size: 1rem;
+
+            padding: 1em;
+            background-color: black;
+        }
+
+        #playerCoords {
+            display: flex;
+            flex-direction: column;
+            font-size: 1rem;
+
+            padding: 1em;
+            background-color: #300;
+        }
+
+        #controls {
+            background-color: #030;
+            padding: 1em;
+        }
+
+        .inputRow {
+            display: flex;
+            gap: 1em;
+            align-items: center;
+        }
+
+        .inputRow input {
+            width: 6ch;
+            color: white;
+            background-color: black;
+        }
+
+        .scoreMap {
+            display: grid;
+            grid-template-areas:
+                "blackBileOrgan blackBile . . . blood bloodOrgan"
+                ". . blackBileBalance . bloodBalance . ." 
+                ". . . score . . ."
+                ". . yellowBileBalance . phlegmBalance . ."
+                "yellowBileOrgan yellowBile . . . phlegm phlegmOrgan";
+            grid-template-columns: 1em 1fr 0.35fr 4.5em 0.35fr 1fr 1em;
+            grid-template-rows: 1fr 0.3fr 4.5em 0.3fr 1fr;
+
+            border: 10px outset var(--pageBgColor);
+            padding: 0.5em;
+        }
+
+        .humorPipsGroup {
+            display: flex;
+            flex-direction: column;
+            gap: 0.2em;
+            align-items: center;
+        }
+
+        .humorPips {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            grid-template-rows: 1fr 1fr;
+            gap: 0.2em;
+        }
+
+        .humorPip {
+            width: 2em;
+            aspect-ratio: 1;
+
+            position: relative;
+
+            background-position: center;
+            background-size: contain;
+            background-repeat: no-repeat;
+        }
+
+        .humorBalanceScore {
+            display: grid;
+            place-items: center;
+            font-size: 2em;
+        }
+
+        /*
+        .humorPip::after {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-color: red;
+            content: " ";
+            opacity: 0.5;
+        }*/
+
+        .organLabel {
+            writing-mode: vertical-rl;
+            text-orientation: mixed;
+            text-align: center;
+        }
+
+        .scoreGem {
+            background-image: url(gem-score.png);
+            background-position: center;
+            background-size: contain;
+            background-repeat: no-repeat;
+            display: grid;
+            place-items: center;
+            aspect-ratio: 1;
+            width: 1.5em;
+            font-size: 3em;
+            grid-area: score;
+            /*border: 0.25em outset rgb(121, 88, 35);*/
+        }
+
+        .actionButtons > div {
+            display: flex;
+            flex-direction: column;
+            gap: 1em;
+            margin-block: 1em;
+        }
+
+        .attackButton {
+            border: 0.5em outset var(--pageBgColor);/* rgb(121, 88, 35);*/
+            background-color: transparent;
+            color: inherit;
+            padding: 1em;
+        }
+
+        .attackButton:active {
+            border-style: inset;
+            transform: translateY(0.25em);
+        }
+
+        .progress {
+            height: 2em;
+            position: relative;
+            content: " ";
+            background-color: transparent;
+        }
+
+        .progress::after {
+            position: absolute; top: 0; left: 0; bottom: 0;
+            right: calc((1 - var(--value)) * 100%);
+            transition: right 100ms;
+            content: " ";
+            background-color: var(--pageBgColor);
+        }
+    </style>
+</head>
+
+<body x-data="d" :style="{'--pageBgColor':`var(--${currLocation})`}">
+    <script src="luxon.js"></script>
+    <script src="chance.min.js"></script>
+    <script src="pocketbase.umd.min.0.20.0.js"></script>
+    <script defer src="alpinejs.persist.3.min.js"></script>
+    <script src="alpine.3.13.2.min.js" defer></script>
+    <script src="howler.min.js"></script>
+    <main>
+        <h1>Humor Balance:<br>Admin</h1>
+        <button class="attackButton" @click="resetScores">Reset Scores</button>
+    </main>
+    <div style="opacity: 0.2; position: absolute; top: 0; right: 0; display: flex; flex-direction: column; gap: 1em;">
+    </div>
+
+    <script>
+        var HUMORS = {
+            'blood': {
+                id: 'blood',
+                organLabel: 'Liver',
+                label: 'Blood',
+                icon: "🩸",
+                color: "firebrick",
+                contrastColor: "white",
+                oppositeId: 'yellowBile',
+                elementIcon: "💨",
+                bottomRow: false,
+            },
+            'phlegm': {
+                id: 'phlegm',
+                organLabel: 'Brain',
+                label: 'Phlegm',
+                icon: "🤢",
+                color: "greenyellow",
+                contrastColor: "white",
+                oppositeId: 'blackBile',
+                elementIcon: "💧",
+                bottomRow: true,
+            },
+            'yellowBile': {
+                id: 'yellowBile',
+                organLabel: 'Gallbladder',
+                label: 'Yellow Bile',
+                icon: "🍋",
+                color: "goldenrod",
+                contrastColor: "black",
+                oppositeId: 'blood',
+                elementIcon: "🔥",
+                bottomRow: true,
+            },
+            'blackBile': {
+                id: 'blackBile',
+                organLabel: 'Spleen',
+                label: 'Black Bile',
+                icon: "💩",
+                color: "black",
+                contrastColor: "white",
+                oppositeId: 'phlegm',
+                elementIcon: "🌾",
+                bottomRow: false,
+            },
+        }
+
+        var LOCATIONS = {
+            'center': {
+                label: "Center",
+            },
+            'blood': HUMORS.blood,
+            'blackBile': HUMORS.blackBile,
+            'yellowBile': HUMORS.yellowBile,
+            'phlegm': HUMORS.phlegm,
+        }
+
+        var LOCATIONS_ORDER = ['center', 'blood', 'blackBile', 'yellowBile', 'phlegm']
+
+        var HUMOR_BALANCE_LOCATION_IDS = {
+            'center': 'e4pfjc2wt7g3ma6',
+            'yellowBile': 'xorhdcrizswsnu0',
+            'blackBile': 'ciinvy5h2u72dpw',
+            'blood': 'ilx66ueeex3o2h0',
+            'phlegm': '2vhc903oass9jd8',
+        }
+
+        function calculateDistance(lat1, lng1, lat2, lng2) {
+            const R = 6371; // Radius of Earth in km
+            const dLat = (lat2 - lat1) * Math.PI / 180;
+            const dLng = (lng2 - lng1) * Math.PI / 180;
+            const a = 
+                Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                Math.sin(dLng / 2) * Math.sin(dLng / 2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+            return (R * c) * 1000;
+        }
+
+        let pb = new PocketBase('https://pb.billkarnavas.com/');
+        pb.autoCancellation(false);
+
+        var uploadSound = new Howl({src: ['hitHurt.ogg']});
+
+        document.addEventListener('alpine:init', () => {
+            Alpine.data('d', () => (Object.assign({
+                myLastCoords: null,
+                userId: null,
+                userGeoCoordsId: null,
+                playerCoords: [],
+                currLocation: Alpine.$persist('between'),
+                humorCounts: {
+                    'blood': 1,
+                    'blackBile': 0,
+                    'yellowBile': 2,
+                    'phlegm': 4,
+                },
+                currLocationRange: 7,
+                debugReadout: '',
+                otherPlayers: [],
+
+                async init() {
+                    this.otherPlayers = pb.collection('humor_balance_players').getFullList({
+                        filter: 'active = true',
+                        sort: '-gameScore'
+                    })
+
+                    setInterval(async () => {
+                            this.otherPlayers = pb.collection('humor_balance_players').getFullList({
+                            filter: 'active = true',
+                            sort: '-gameScore'
+                        })
+                    }, 5000)
+                },
+
+                async updateGame() {
+                    this.tickingNow = Date.now();
+                },
+
+                async getTitle() {
+                    if (this.currLocation === 'between') {
+                        return "Between";
+                    } else if (this.currLocation === 'center') {
+                        return "Center";
+                    } else {
+                        return `${HUMORS[this.currLocation].organLabel} (${HUMORS[this.currLocation].label})`;
+                    }
+                },
+
+                async updateGeoCoords(position) {
+                    this.myLastCoords = position.coords;
+                    uploadSound.play();
+
+                    const data = {
+                        "playerId": this.userId,
+                        "geolocationCoordinates": JSON.stringify(this.myLastCoords),
+                        "lastUpdated": luxon.DateTime.utc().toISO(), //"2022-01-01 10:00:00.123Z"
+                        "playerName": this.userName,
+                    };
+
+                    //const record = await pb.collection('geo_demo_coords').update(this.userGeoCoordsId, data);
+                },
+
+                async incrementLocation() {
+                    let currLocationIdx = LOCATIONS_ORDER.indexOf(this.currLocation);
+                    this.currLocation = LOCATIONS_ORDER[(currLocationIdx+1) % LOCATIONS_ORDER.length]
+                    this.currLocationRange = (await pb.collection('humor_balance_locations').getOne(HUMOR_BALANCE_LOCATION_IDS[this.currLocation])).range;
+                    this.debugReadout = JSON.stringify(await pb.collection('humor_balance_locations').getFullList());
+                },
+
+                async updateLocationPoint() {
+                    await pb.collection('humor_balance_locations').update(HUMOR_BALANCE_LOCATION_IDS[this.currLocation], {
+                        latitude: this.myLastCoords.latitude,
+                        longitude: this.myLastCoords.longitude,
+                    })
+                },
+
+                async updateRange() {
+                    await pb.collection('humor_balance_locations').update(HUMOR_BALANCE_LOCATION_IDS[this.currLocation], {
+                        range: this.currLocationRange,
+                    })
+                },
+
+                async resetScores() {
+                    this.otherPlayers = await pb.collection('humor_balance_players').getFullList({
+                        sort: '-gameScore',
+                    })
+
+                    this.otherPlayers.forEach(async p => {
+                        let NEW_GAME_HUMOR_COUNTS = {
+                            'blood': 2,
+                            'blackBile': 2,
+                            'yellowBile': 2,
+                            'phlegm': 2,
+                        }
+
+                        let humorCounts = structuredClone(NEW_GAME_HUMOR_COUNTS);
+                        for (let currHumor of Object.keys(humorCounts)) {
+                            humorCounts[currHumor] = chance.integer({min: 0, max: 2})
+                        }
+                        await pb.collection('humor_balance_players').update(p.id, {
+                            humorCounts: humorCounts,
+                            gameScore: 0,
+                            active: false,
+                        })
+                    })
+
+                    pb.collection('humor_balance_resets').create({'yes': 'a'});
+                },
+            }, {})))
+        });
+    </script>
+</body>
+
+</html>
