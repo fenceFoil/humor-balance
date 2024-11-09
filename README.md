@@ -8,7 +8,7 @@ Played in the 120x150 foot field around the Self Made Man at UNCC! Run between t
 
 > The game
 
-![](self-made-man-sculpture.png)
+![](doc/self-made-man-sculpture.png)
 
 > The statue in its field.
 
